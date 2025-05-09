@@ -12,8 +12,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.text.method.PasswordTransformationMethod
-import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AnticipateInterpolator
@@ -81,11 +79,13 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.Serializable
 
+
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var incognitoLiveData: SharedPreferenceBooleanLiveData
     private val scope = lifecycleScope
     private var load = false
+
 
     @kotlin.OptIn(DelicateCoroutinesApi::class)
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
@@ -95,6 +95,7 @@ class MainActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
 
+        //get FRAGMENT_CLASS_NAME from intent
         val fragment = intent.getStringExtra("FRAGMENT_CLASS_NAME")
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -122,6 +123,7 @@ class MainActivity : AppCompatActivity() {
 
         val bottomNavBar = findViewById<AnimatedBottomBar>(R.id.navbar)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+
             val backgroundDrawable = bottomNavBar.background as GradientDrawable
             val currentColor = backgroundDrawable.color?.defaultColor ?: 0
             val semiTransparentColor = (currentColor and 0x00FFFFFF) or 0xF9000000.toInt()
@@ -163,6 +165,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 slideUpAnim.duration = 200
                 slideUpAnim.start()
+                //wait for animation to finish
                 Handler(Looper.getMainLooper()).postDelayed(
                     { binding.incognito.visibility = View.GONE },
                     200
@@ -226,6 +229,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
 
         binding.root.doOnAttach {
             initActivity(this)
@@ -305,6 +309,7 @@ class MainActivity : AppCompatActivity() {
                 val feedIntent = Intent(this, FeedActivity::class.java).apply {
                     putExtra("FRAGMENT_TO_LOAD", "NOTIFICATIONS")
                     putExtra("activityId", activityId)
+
                 }
                 launched = true
                 startActivity(feedIntent)
@@ -328,6 +333,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 val model: AnilistHomeViewModel by viewModels()
 
+                //Load Data
                 if (!load && !launched) {
                     scope.launch(Dispatchers.IO) {
                         model.loadMain(this@MainActivity)
@@ -434,11 +440,7 @@ class MainActivity : AppCompatActivity() {
         val margin = if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) 8 else 32
         val params: ViewGroup.MarginLayoutParams =
             binding.includedNavbar.navbar.layoutParams as ViewGroup.MarginLayoutParams
-        params.updateMargins(bottom = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP, 
-            margin.toFloat(), 
-            resources.displayMetrics
-        ).toInt())
+        params.updateMargins(bottom = margin.toPx)
     }
 
     private fun handleViewIntent(intent: Intent) {
@@ -470,6 +472,7 @@ class MainActivity : AppCompatActivity() {
                     ?: throw Exception("Error reading file")
             val name =
                 DocumentFile.fromSingleUri(this, uri)?.name ?: "settings"
+            //.sani is encrypted, .ani is not
             if (name.endsWith(".sani")) {
                 passwordAlertDialog { password ->
                     if (password != null) {
@@ -482,7 +485,7 @@ class MainActivity : AppCompatActivity() {
                                 salt
                             )
                         } catch (e: Exception) {
-                            toast(getString(R.string.incorrect_password))
+                            toast("Incorrect password")
                             return@passwordAlertDialog
                         }
                         if (PreferencePackager.unpack(decryptedJson)) {
@@ -491,7 +494,7 @@ class MainActivity : AppCompatActivity() {
                             startActivity(newIntent)
                         }
                     } else {
-                        toast(getString(R.string.password_cannot_be_empty))
+                        toast("Password cannot be empty")
                     }
                 }
             } else if (name.endsWith(".ani")) {
@@ -502,47 +505,25 @@ class MainActivity : AppCompatActivity() {
                     startActivity(newIntent)
                 }
             } else {
-                toast(getString(R.string.unknown_file_type))
+                toast("Invalid file type")
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            toast(getString(R.string.error_importing_settings))
+            toast("Error importing settings")
         }
     }
 
     private fun passwordAlertDialog(callback: (CharArray?) -> Unit) {
         val password = CharArray(16).apply { fill('0') }
 
+        // Inflate the dialog layout
         val dialogView = DialogUserAgentBinding.inflate(layoutInflater).apply {
-            userAgentTextBox.hint = getString(R.string.password)
+            userAgentTextBox.hint = "Password"
             subtitle.visibility = View.VISIBLE
             subtitle.text = getString(R.string.enter_password_to_decrypt_file)
-            
-            val showPasswordToggle = TextView(context).apply {
-                text = "👁️ ${getString(R.string.show_password)}"
-                setTextColor(ContextCompat.getColor(context, R.color.brand))
-                setPadding(0, TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP, 
-                    16f, 
-                    resources.displayMetrics
-                ).toInt(), 0, 0)
-                setOnClickListener {
-                    val selection = userAgentTextBox.selectionEnd
-                    if (userAgentTextBox.transformationMethod == PasswordTransformationMethod.getInstance()) {
-                        userAgentTextBox.transformationMethod = null
-                        text = "👁️ ${getString(R.string.hide_password)}"
-                    } else {
-                        userAgentTextBox.transformationMethod = PasswordTransformationMethod.getInstance()
-                        text = "👁️ ${getString(R.string.show_password)}"
-                    }
-                    userAgentTextBox.setSelection(selection)
-                }
-            }
-            userAgentContainer.addView(showPasswordToggle)
         }
-
         customAlertDialog().apply {
-            setTitle(getString(R.string.enter_password))
+            setTitle("Enter Password")
             setCustomView(dialogView.root)
             setPosButton(R.string.yes) {
                 val editText = dialogView.userAgentTextBox
@@ -550,7 +531,7 @@ class MainActivity : AppCompatActivity() {
                     editText.text?.toString()?.trim()?.toCharArray(password)
                     callback(password)
                 } else {
-                    toast(getString(R.string.password_cannot_be_empty))
+                    toast("Password cannot be empty")
                 }
             }
             setNegButton(R.string.cancel) {
@@ -561,18 +542,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    //ViewPager
     private class ViewPagerAdapter(fragmentManager: FragmentManager, lifecycle: Lifecycle) :
         FragmentStateAdapter(fragmentManager, lifecycle) {
 
         override fun getItemCount(): Int = 3
 
         override fun createFragment(position: Int): Fragment {
-            return when (position) {
-                0 -> AnimeFragment()
-                1 -> if (Anilist.token != null) HomeFragment() else LoginFragment()
-                2 -> MangaFragment()
-                else -> LoginFragment()
+            when (position) {
+                0 -> return AnimeFragment()
+                1 -> return if (Anilist.token != null) HomeFragment() else LoginFragment()
+                2 -> return MangaFragment()
             }
+            return LoginFragment()
         }
     }
+
 }
